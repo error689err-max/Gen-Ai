@@ -160,7 +160,9 @@ class ChatService:
                     log.warning("Agent did not call a tool, forcing fallback finish")
                     span.set_attribute("agent.action", "fallback_finish")
                     final_text = response.content or "I could not process that request."
-                    await self.memory.save_turn(session_id, query, final_text)
+                    # Save full conversation (excluding system message) for thought_signature preservation
+                    conversation_to_save = [msg for msg in messages if msg.role != "system"]
+                    await self.memory.save_conversation(session_id, conversation_to_save)
                     return {
                         "answer": final_text,
                         "citations": [],
@@ -227,7 +229,10 @@ class ChatService:
                                     "relevance_score": chunk.get("rerank_score", chunk.get("score", 0.0))
                                 })
                         
-                        await self.memory.save_turn(session_id, query, final_answer)
+                        # Save full conversation (excluding system message) for thought_signature preservation
+                        # This preserves tool calls with their thought_signatures for Gemini 3 series
+                        conversation_to_save = [msg for msg in messages if msg.role != "system"]
+                        await self.memory.save_conversation(session_id, conversation_to_save)
                         log.info("Agent finished with structured output", citation_count=len(citations))
                         
                         result = {
