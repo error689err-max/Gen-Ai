@@ -5,6 +5,7 @@ Uses Google's gemini-3.5-flash model.
 Supports Tool Calling by translating generic schemas to Gemini's protobuf format.
 """
 import asyncio
+import base64
 import json
 import uuid
 import google.generativeai as genai
@@ -140,17 +141,17 @@ class GeminiProvider(LLMProvider):
                         args_dict = _protobuf_to_dict(part.function_call.args)
                         args_json = json.dumps(args_dict)
                         
-                        # Capture thought_signature if present (required for Gemini 3 series)
+                        # Capture thought_signature from the Part (not function_call) for Gemini 3 series
+                        # The thought_signature is a bytes object attached to the Part
                         thought_signature = None
-                        if hasattr(part.function_call, 'thought_signature'):
-                            sig = part.function_call.thought_signature
-                            if sig and hasattr(sig, 'value'):
-                                thought_signature = sig.value
-                                log.debug("Captured thought_signature for function call", 
-                                         func_name=func_name, has_signature=bool(thought_signature))
+                        if hasattr(part, 'thought_signature') and part.thought_signature:
+                            # thought_signature is bytes, encode to base64 string for transport
+                            thought_signature = base64.b64encode(part.thought_signature).decode('utf-8')
+                            log.debug("Captured thought_signature for function call", 
+                                     func_name=func_name, has_signature=bool(thought_signature))
                         
                         tool_call_entry = {
-                            "id": f"call_{uuid.uuid4().hex[:8]}",
+                            "id": part.function_call.id if hasattr(part.function_call, 'id') and part.function_call.id else f"call_{uuid.uuid4().hex[:8]}",
                             "type": "function",
                             "function": {
                                 "name": func_name,
@@ -244,9 +245,11 @@ class GeminiProvider(LLMProvider):
                         }
                     }
                     
-                    # Include thought_signature if present (required for Gemini 3 series)
+                    # Include thought_signature at Part level (not inside function_call)
+                    # The thought_signature is a base64-encoded string that must be decoded to bytes
                     if "thought_signature" in tc and tc["thought_signature"]:
-                        function_call_part["function_call"]["thought_signature"] = tc["thought_signature"]
+                        # Decode base64 string back to bytes for the API
+                        function_call_part["thought_signature"] = base64.b64decode(tc["thought_signature"])
                     
                     parts.append(function_call_part)
                 contents.append({"role": "model", "parts": parts})
