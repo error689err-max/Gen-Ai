@@ -33,14 +33,38 @@ class OpenAIProvider(LLMProvider):
         """Non-streaming generation with Tier 3 Response Cache."""
         
         # TIER 3 CACHE: Exact-match response cache
+        # Build messages - exclude None content
+        messages = []
+        for msg in request.messages:
+            msg_dict = {"role": msg.role}
+            if msg.content:
+                msg_dict["content"] = msg.content
+            if msg.tool_calls:
+                msg_dict["tool_calls"] = msg.tool_calls
+            if msg.tool_call_id:
+                msg_dict["tool_call_id"] = msg.tool_call_id
+            messages.append(msg_dict)
+        
+        # Build tools only if present
+        tools = None
+        if request.tools:
+            tools = []
+            for t in request.tools:
+                tools.append(t.model_dump(exclude_none=True))
+        
         req_dict = {
             "model": self.get_model_id(),
-            "messages": [msg.model_dump(exclude_none=True) for msg in request.messages],
+            "messages": messages,
             "max_tokens": request.max_tokens,
             "temperature": request.temperature,
-            "tools": [t.model_dump() for t in request.tools] if request.tools else None,
-            "tool_choice": request.tool_choice
         }
+        
+        # Only add tools if present
+        if tools:
+            req_dict["tools"] = tools
+            if request.tool_choice:
+                req_dict["tool_choice"] = request.tool_choice
+        
         req_hash = hashlib.md5(json.dumps(req_dict, sort_keys=True).encode()).hexdigest()
         cache_key = f"llm_cache:{req_hash}"
 
@@ -51,14 +75,13 @@ class OpenAIProvider(LLMProvider):
 
         # Cache Miss: Build payload and call API
         payload = req_dict.copy()
-        if not payload["tools"]:
-            del payload["tools"]
-            del payload["tool_choice"]
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
+        
+        self.logger.debug("Calling OpenAI API", model=self.model_id, message_count=len(messages), has_tools=bool(tools))
         
         # Create httpx client on the fly
         async with httpx.AsyncClient(timeout=60.0) as client:

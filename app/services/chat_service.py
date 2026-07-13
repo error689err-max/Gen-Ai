@@ -140,7 +140,7 @@ class ChatService:
             with tracer.start_as_current_span(f"agent_step_{step}") as span:
                 request = LLMRequest(
                     messages=messages,
-                    max_tokens=8192,
+                    max_tokens=4096,  # Reduced for Groq compatibility
                     temperature=0.1,
                     tools=self.tools,
                     tool_choice="auto"
