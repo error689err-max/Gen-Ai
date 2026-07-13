@@ -107,36 +107,12 @@ class GeminiProvider(LLMProvider):
                 tools=gemini_tools
             )
         
-        # Configure generation with thinking level to reduce thought_signature requirements
-        settings = get_settings()
-        generation_config_dict = {
-            "max_output_tokens": request.max_tokens,
-            "temperature": request.temperature,
-        }
+        generation_config = genai.GenerationConfig(
+            max_output_tokens=request.max_tokens,
+            temperature=request.temperature,
+        )
         
-        # Set thinking level if configured (helps with thought_signature requirements)
-        # Options: "low", "minimal", "medium", "high" or empty to use model default
-        if settings.gemini_thinking_level:
-            generation_config_dict["thinking_config"] = genai.ThinkingConfig(
-                thinking_budget=int(settings.gemini_thinking_level) if settings.gemini_thinking_level.isdigit() else None
-            ) if False else {"thinking_budget": 256}  # Use a low budget as default
-        
-        # Try to set thinking_level if available (Gemini 3 series)
-        try:
-            if settings.gemini_thinking_level == "minimal":
-                generation_config_dict["thinking_config"] = genai.ThinkingConfig(thinking_budget=256)
-            elif settings.gemini_thinking_level == "low":
-                generation_config_dict["thinking_config"] = genai.ThinkingConfig(thinking_budget=1024)
-            elif settings.gemini_thinking_level == "medium":
-                generation_config_dict["thinking_config"] = genai.ThinkingConfig(thinking_budget=4096)
-            elif settings.gemini_thinking_level == "high":
-                generation_config_dict["thinking_config"] = genai.ThinkingConfig(thinking_budget=8192)
-        except Exception as e:
-            log.debug("Could not set thinking_config", error=str(e))
-        
-        generation_config = genai.GenerationConfig(**generation_config_dict)
-        
-        log.debug("Calling Gemini API", model=self.model_id, thinking_level=settings.gemini_thinking_level)
+        log.debug("Calling Gemini API")
         response = await asyncio.to_thread(
             model.generate_content,
             contents,

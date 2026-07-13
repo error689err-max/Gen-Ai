@@ -37,9 +37,6 @@ class Settings(BaseSettings):
         "models/text-embedding-004",
         alias="GEMINI_EMBEDDING_MODEL",
     )
-    # Set to "low" or "minimal" to reduce thinking/thought_signature requirements
-    # Set to empty string "" to use model default
-    gemini_thinking_level: str = Field("minimal", alias="GEMINI_THINKING_LEVEL")
 
     # ───────────────────────────────────────────────────────
     # OpenAI / Groq
