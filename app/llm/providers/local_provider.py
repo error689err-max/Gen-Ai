@@ -62,7 +62,9 @@ class OpenAIProvider(LLMProvider):
         # Only add tools if present
         if tools:
             req_dict["tools"] = tools
-            if request.tool_choice:
+            # Note: tool_choice may not be supported by all OpenAI-compatible APIs
+            # Only include if explicitly set and not "auto"
+            if request.tool_choice and request.tool_choice != "auto":
                 req_dict["tool_choice"] = request.tool_choice
         
         req_hash = hashlib.md5(json.dumps(req_dict, sort_keys=True).encode()).hexdigest()
@@ -90,7 +92,15 @@ class OpenAIProvider(LLMProvider):
                 json=payload,
                 headers=headers
             )
-            response.raise_for_status()
+            
+            if response.status_code != 200:
+                error_detail = response.text
+                self.logger.error("OpenAI API error", 
+                                 status_code=response.status_code,
+                                 error=error_detail,
+                                 payload_size=len(json.dumps(payload)))
+                response.raise_for_status()
+            
             response_json = response.json()
             
             choice = response_json["choices"][0]
