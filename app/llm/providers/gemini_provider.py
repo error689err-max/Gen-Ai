@@ -140,14 +140,29 @@ class GeminiProvider(LLMProvider):
                         args_dict = _protobuf_to_dict(part.function_call.args)
                         args_json = json.dumps(args_dict)
                         
-                        tool_calls.append({
+                        # Capture thought_signature if present (required for Gemini 3 series)
+                        thought_signature = None
+                        if hasattr(part.function_call, 'thought_signature'):
+                            sig = part.function_call.thought_signature
+                            if sig and hasattr(sig, 'value'):
+                                thought_signature = sig.value
+                                log.debug("Captured thought_signature for function call", 
+                                         func_name=func_name, has_signature=bool(thought_signature))
+                        
+                        tool_call_entry = {
                             "id": f"call_{uuid.uuid4().hex[:8]}",
                             "type": "function",
                             "function": {
                                 "name": func_name,
                                 "arguments": args_json
                             }
-                        })
+                        }
+                        
+                        # Include thought_signature if present
+                        if thought_signature:
+                            tool_call_entry["thought_signature"] = thought_signature
+                        
+                        tool_calls.append(tool_call_entry)
         
         usage = response.usage_metadata
         
@@ -222,12 +237,18 @@ class GeminiProvider(LLMProvider):
                     func_name_map[tool_call_id] = func_name
                     
                     args_dict = json.loads(tc["function"]["arguments"])
-                    parts.append({
+                    function_call_part = {
                         "function_call": {
                             "name": func_name,
                             "args": args_dict
                         }
-                    })
+                    }
+                    
+                    # Include thought_signature if present (required for Gemini 3 series)
+                    if "thought_signature" in tc and tc["thought_signature"]:
+                        function_call_part["function_call"]["thought_signature"] = tc["thought_signature"]
+                    
+                    parts.append(function_call_part)
                 contents.append({"role": "model", "parts": parts})
                 
             elif msg.role == "tool":
