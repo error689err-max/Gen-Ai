@@ -128,7 +128,12 @@ class GeminiProvider(LLMProvider):
             finish_reason = str(candidate.finish_reason)
             
             if candidate.content and candidate.content.parts:
-                for part in candidate.content.parts:
+                for idx, part in enumerate(candidate.content.parts):
+                    log.debug("Processing response part", part_index=idx, 
+                             has_text=bool(part.text) if hasattr(part, 'text') else False,
+                             has_function_call=bool(part.function_call.name) if hasattr(part, 'function_call') else False,
+                             has_thought_signature=bool(part.thought_signature) if hasattr(part, 'thought_signature') else False)
+                    
                     if hasattr(part, 'text') and part.text:
                         content += part.text
                     elif hasattr(part, 'function_call') and part.function_call.name:
@@ -148,7 +153,13 @@ class GeminiProvider(LLMProvider):
                             # thought_signature is bytes, encode to base64 string for transport
                             thought_signature = base64.b64encode(part.thought_signature).decode('utf-8')
                             log.debug("Captured thought_signature for function call", 
-                                     func_name=func_name, has_signature=bool(thought_signature))
+                                     func_name=func_name, 
+                                     has_signature=bool(thought_signature),
+                                     signature_length=len(thought_signature) if thought_signature else 0)
+                        else:
+                            log.warning("No thought_signature found in function call part", 
+                                       func_name=func_name,
+                                       part_index=idx)
                         
                         tool_call_entry = {
                             "id": part.function_call.id if hasattr(part.function_call, 'id') and part.function_call.id else f"call_{uuid.uuid4().hex[:8]}",
@@ -250,6 +261,14 @@ class GeminiProvider(LLMProvider):
                     if "thought_signature" in tc and tc["thought_signature"]:
                         # Decode base64 string back to bytes for the API
                         function_call_part["thought_signature"] = base64.b64decode(tc["thought_signature"])
+                        log.debug("Including thought_signature in formatted message",
+                                 func_name=func_name,
+                                 has_signature=bool(function_call_part.get("thought_signature")),
+                                 signature_type=type(function_call_part.get("thought_signature")))
+                    else:
+                        log.debug("No thought_signature to include in formatted message",
+                                 func_name=func_name,
+                                 tc_keys=list(tc.keys()))
                     
                     parts.append(function_call_part)
                 contents.append({"role": "model", "parts": parts})
