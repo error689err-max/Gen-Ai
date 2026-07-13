@@ -107,12 +107,15 @@ class GeminiProvider(LLMProvider):
                 tools=gemini_tools
             )
         
+        # Disable thinking by setting thinking_budget to 0
+        # This prevents the model from generating thought_signatures
         generation_config = genai.GenerationConfig(
             max_output_tokens=request.max_tokens,
             temperature=request.temperature,
+            thinking_config=genai.ThinkingConfig(thinking_budget=0)  # Disable thinking
         )
         
-        log.debug("Calling Gemini API")
+        log.debug("Calling Gemini API", model=self.model_id, thinking_disabled=True)
         response = await asyncio.to_thread(
             model.generate_content,
             contents,
