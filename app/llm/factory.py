@@ -23,10 +23,8 @@ def create_llm_provider() -> LLMProvider:
         return GeminiProvider()
 
     elif provider_name == "bedrock":
-        raise NotImplementedError(
-            "Bedrock LLM provider will be added in Phase 7. "
-            "Use LLM_PROVIDER=gemini for now."
-        )
+        from app.llm.providers.bedrock_provider import BedrockProvider
+        return BedrockProvider()
     elif provider_name == "openai":
         from app.llm.providers.local_provider import OpenAIProvider
         return OpenAIProvider()
